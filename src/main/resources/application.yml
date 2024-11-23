@@ -1,0 +1,14 @@
+server:
+  port: 8060
+spring:
+  application:
+        name: ControlService
+  main:
+    allow-bean-definition-overriding: true
+    web-application-type: reactive
+  data:
+    mongodb:
+      uri: mongodb+srv://iot_mongo:abCD%401234@cluster0.kfltces.mongodb.net/iot_mongo_car?retryWrites=true&w=majority
+  thymeleaf:
+    prefix: classpath:/templates/
+    suffix: .html
