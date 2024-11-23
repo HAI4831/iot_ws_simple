@@ -1,4 +1,4 @@
-package com.run.iot_websocket;
+package com.run.iot_ws_simple_4;
 
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;

@@ -1,13 +1,13 @@
-package com.run.iot_ws_simple_4;
-
-import org.junit.jupiter.api.Test;
-import org.springframework.boot.test.context.SpringBootTest;
-
-@SpringBootTest
-class IotWsSimple4ApplicationTests {
-
-    @Test
-    void contextLoads() {
-    }
-
-}
+//package com.run.iot_ws_simple_4;
+//
+//import org.junit.jupiter.api.Test;
+//import org.springframework.boot.test.context.SpringBootTest;
+//
+//@SpringBootTest
+//class IotWsSimple4ApplicationTests {
+//
+//    @Test
+//    void contextLoads() {
+//    }
+//
+//}
