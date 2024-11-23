@@ -194,8 +194,8 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
         case WStype_CONNECTED:
             Serial.println("[WebSocket] Connected to server");
             // Gửi tin nhắn JSON ngay sau khi kết nối
-            String message = "esp8266 device connected";
-            webSocket.sendTXT(message);
+//             String message = "esp8266 device connected";
+//             webSocket.sendTXT(message);
             wasConnected = true;
             break;
         case WStype_TEXT:
