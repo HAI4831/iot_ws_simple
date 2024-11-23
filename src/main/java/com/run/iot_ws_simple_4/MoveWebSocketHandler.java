@@ -19,6 +19,7 @@ public class MoveWebSocketHandler implements WebSocketHandler {
     private final ObjectMapper objectMapper;  // Injected ObjectMapper for JSON processing
     private final ActionMoveService actionMoveService;  // Service to handle business logic
     private final WebSocketSessionManager sessionManager;
+
     @Override
     public Mono<Void> handle(WebSocketSession session) {
         // Add session to manager on connect
@@ -37,24 +38,21 @@ public class MoveWebSocketHandler implements WebSocketHandler {
                 })
                 .flatMap(actionMoveRequest -> {
                     if (actionMoveRequest != null) {
-                        // Lưu dữ liệu và phản hồi dạng JSON
+                        // Serialize the ActionMoveRequest to JSON before broadcasting
+                        String messageJson = toJson(actionMoveRequest);
+                        broadcastMessageToAllSessionsOther(session, messageJson);
                         return actionMoveService.saveActionMove(actionMoveRequest)
-                                .flatMap(response -> {
-                                    // Chuyển thành JSON message
-                                    String messageJson = toJson(response);
-                                    // Gửi broadcast tới tất cả session
-                                    broadcastMessageToAllSessionsOther(session, messageJson);
-//                                    broadcastMessageToAllSessions(messageJson);
-                                    return Mono.empty(); // Không gửi lại cho chính client đã gửi
-                                });
+                                .map(response -> session.textMessage(toJson(response)));
                     } else {
                         return Mono.empty();
                     }
                 });
 
+        // Process incoming messages and ensure the session is removed when done
         return session.send(incomingMessages)
-                .doFinally(signalType -> sessionManager.removeSession(session)); // Remove session khi ngắt kết nối
+                .doFinally(signalType -> sessionManager.removeSession(session)); // Remove session when disconnected
     }
+
     private void broadcastMessageToAllSessions(String messageJson) {
         sessionManager.getSessions().forEach(session -> {
             if (session.isOpen()) {
@@ -66,10 +64,12 @@ public class MoveWebSocketHandler implements WebSocketHandler {
             }
         });
     }
+
     private void broadcastMessageToAllSessionsOther(WebSocketSession currentSession, String messageJson) {
+        String command = handleMessage(messageJson);
         sessionManager.getSessions().forEach(session -> {
-            if (!session.getId().equals(currentSession.getId()) && session.isOpen()) { // Loại bỏ session hiện tại
-                session.send(Mono.just(session.textMessage(messageJson)))
+            if (!session.getId().equals(currentSession.getId()) && session.isOpen()) { // Exclude the current session
+                session.send(Mono.just(session.textMessage(command)))
                         .subscribe(
                                 null,
                                 error -> log.error("Error sending message to session {}: {}", session.getId(), error)
@@ -78,8 +78,21 @@ public class MoveWebSocketHandler implements WebSocketHandler {
         });
     }
 
-
-
+    private String handleMessage(String messageJson) {
+        try {
+            // Convert JSON to ActionMoveRequest
+            ActionMoveRequest actionMoveRequest = toActionMoveRequest(messageJson);
+            String actionMoveNameStr = actionMoveRequest.getActionMoveName();
+            Long speed = actionMoveRequest.getSpeed();
+            ActionMove.ActionMoveName actionMoveName = ActionMove.ActionMoveName.valueOf(actionMoveNameStr.toUpperCase());
+            String command = String.format("{\"action_move_name\":\"%s\",\"speed\":%d}", actionMoveName.getEspEndpoint(), speed);
+            return command;
+        }
+        catch (Exception e) {
+            log.error("Lỗi xử lí tin nhắn "+messageJson+" thành lệnh " +e);
+            return messageJson;
+        }
+    }
 
     // Converts JSON string to ActionMoveRequest
     private ActionMoveRequest toActionMoveRequest(String json) {
@@ -97,6 +110,15 @@ public class MoveWebSocketHandler implements WebSocketHandler {
             return objectMapper.writeValueAsString(response);
         } catch (JsonProcessingException e) {
             log.error("Error converting ActionMoveResponse to JSON", e);
+            throw new RuntimeException(e);
+        }
+    }
+    // Converts ActionMoveRequest to JSON string
+    private String toJson(ActionMoveRequest request) {
+        try {
+            return objectMapper.writeValueAsString(request);
+        } catch (JsonProcessingException e) {
+            log.error("Error converting ActionMoveRequest to JSON", e);
             throw new RuntimeException(e);
         }
     }
