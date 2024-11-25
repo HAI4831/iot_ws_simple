@@ -1,5 +1,5 @@
 // MoveRequest.java
-package com.run.iot_ws_simple_4;
+package com.run.iot_ws_simple_4.dto.request;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;

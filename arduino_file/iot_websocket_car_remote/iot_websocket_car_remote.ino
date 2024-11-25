@@ -3,9 +3,19 @@
 #include <ESP8266WiFi.h>
 #include <WebSocketsClient.h>
 #include <ArduinoJson.h>
+#include <DHT.h>
+#include <stdarg.h>
 
 // Initialize WebSocket client
 WebSocketsClient webSocket;
+
+// Cấu hình cảm biến DHT
+#define DHTPIN D8       // Chân DATA của DHT nối với GPIO 1 (D1 trên NodeMCU)
+#define DHTTYPE DHT11  // Dịnh nghĩa loại DHT là 11 Hoặc thay bằng DHT22 nếu dùng DHT22
+DHT dht(DHTPIN, DHTTYPE);
+
+// Cấu hình cảm biến khí gas (MQ-2)
+#define MQ2_PIN D7     // Chân AO của MQ-2 nối với D7 trên NodeMCU
 
 // Define motor control pins
 #define ENA 5    // GPIO5 (D1)
@@ -37,6 +47,8 @@ const unsigned long STATUS_INTERVAL = 5000; // 5000 ms = 5 giây
 bool wasConnected = false;
 
 // Function Prototypes
+void sendTemperatureAndHumidityDataFromDHT();
+void sendGasData();
 void pinInit();
 bool wifiInit();
 bool websocketInit();
@@ -72,16 +84,57 @@ void loop() {
 
     unsigned long currentMillis = millis();
 
-    // Cập nhật trạng thái mỗi 5 giây chỉ khi WebSocket kết nối
-    if ((currentMillis - lastStatusUpdate >= STATUS_INTERVAL)&&(!WiFi.status() == WL_CONNECTED)
-    // && (!webSocket.isConnected())
-    ) {
-      ESP.restart();
+    // Cập nhật trạng thái mỗi 5 giây 
+    if ((currentMillis - lastStatusUpdate >= STATUS_INTERVAL)){
+      sendTemperatureAndHumidityDataFromDHT();
+      sendGasData();
+        if(!WiFi.status() == WL_CONNECTED){
+          ESP.restart();
+        }
         // sendStatus();
         lastStatusUpdate = currentMillis;
     }
-
     // Thêm các chức năng khác nếu cần
+}
+void sendTemperatureAndHumidityDataFromDHT() {//gửi nhiệt độ và độ ẩm
+  float temperature = dht.readTemperature();// đọc nhiệt độ
+  float humidity = dht.readHumidity();       // Đọc độ ẩm
+
+  if (isnan(temperature) || isnan(humidity) ) {
+    Serial.println("[Error] Lỗi đọc dữ liệu nhiệt độ từ cảm biến DHT11");
+    return;
+  }
+   // In kết quả ra Serial Monitor
+  // Serial.print("Nhiệt độ: ");
+  // Serial.print(temperature);
+  // Serial.println(" °C");
+  // Serial.print("Độ ẩm: ");
+  // Serial.print(humidity);
+  // Serial.println(" %");
+
+  // Gửi JSON qua WebSocket
+  // Construct JSON payload
+    StaticJsonDocument<200> doc;
+    doc["temperature_data"] = temperature;
+    doc["humidity_data"] = humidity;
+    String jsonStatus;
+    serializeJson(doc, jsonStatus);
+    webSocket.sendTXT(jsonStatus);
+    Serial.println("[Status Update] Sending status: " + jsonStatus);
+}
+void sendGasData() {
+  int gasValue = analogRead(MQ2_PIN); // Đọc giá trị từ chân analog của cảm biến MQ-2
+
+  if (gasValue < 0) {
+    Serial.println("[Error] Lỗi đọc dữ liệu khí gas từ cảm biến MQ-2!");
+    return;
+  }
+  StaticJsonDocument<200> doc;
+    doc["gas_data"] = gasValue;
+    String jsonStatus;
+    serializeJson(doc, jsonStatus);
+    webSocket.sendTXT(jsonStatus);
+    Serial.println("[Status Update] Sending status: " + jsonStatus);
 }
 
 // Function to initialize motor control pins
@@ -141,8 +194,8 @@ bool wifiInit(){
 bool websocketInit(){
     Serial.println("[WebSocket] Initializing WebSocket connect to wss://messagingstompwebsocket-latest.onrender.com:443/move");
     //messagingstompwebsocket-latest.onrender.com:443/move
-    // webSocket.begin("192.168.0.104", 8060, "/ws"); // Sử dụng địa chỉ mạng LAN IPv4 thực tế máy chạy spring socket server
-    webSocket.beginSSL("messagingstompwebsocket-latest.onrender.com", 443, "/move");//gọi kết nối tới wss://messagingstompwebsocket-latest.onrender.com:443/ws qua extension piesocket với tin nhắn {"action_move_name":"BACKWARD","speed":10}
+    webSocket.begin("192.168.0.104", 8060, "/move"); // Sử dụng địa chỉ mạng LAN IPv4 thực tế máy chạy spring socket server
+    // webSocket.beginSSL("messagingstompwebsocket-latest.onrender.com", 443, "/move");//gọi kết nối tới wss://messagingstompwebsocket-latest.onrender.com:443/ws qua extension piesocket với tin nhắn {"action_move_name":"BACKWARD","speed":10}
   //  webSocket.begin("messagingstompwebsocket-latest.onrender.com", 443, "/ws", "wss");
   //  webSocket.begin(websocket_server);
 
@@ -285,7 +338,7 @@ void handleMoveRequest(const char* request) {
 
         String response;
         serializeJson(responseDoc, response);
-        webSocket.sendTXT(response);
+        // webSocket.sendTXT(response);
         return;
     }
 
@@ -298,72 +351,81 @@ void handleMoveRequest(const char* request) {
     String response;
     serializeJson(responseDoc, response);
     Serial.println("[Move] Sending response: " + response);
-    webSocket.sendTXT(response);
+    // webSocket.sendTXT(response);
 }
 
 // Function to control forward movement
 void tien() {
-    Serial.println("[Move] Executing 'tien' (forward).");
-    digitalWrite(IN1, LOW);
-    digitalWrite(IN2, HIGH);
-    analogWrite(ENA, MOTOR_SPEED);
-    digitalWrite(IN3, LOW);
-    digitalWrite(IN4, HIGH);
-    analogWrite(ENB, MOTOR_SPEED + 300);
-    digitalWrite(ledPin, HIGH); // Turn on LED
-    Serial.println("[Move] 'tien' executed.");
+  Serial.println("[Move] Executing 'tien' (forward).");
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, HIGH);
+  analogWrite(ENA, MOTOR_SPEED);
+  digitalWrite(IN3, HIGH);
+  digitalWrite(IN4, LOW);
+  analogWrite(ENB, MOTOR_SPEED + 300);
+  digitalWrite(ledPin, HIGH);  // Turn on LED
+  Serial.println("[Move] 'tien' executed.");
 }
-
 // Function to control backward movement
 void lui() {
-    Serial.println("[Move] Executing 'lui' (backward).");
-    digitalWrite(IN1, HIGH);
-    digitalWrite(IN2, LOW);
-    analogWrite(ENA, MOTOR_SPEED);
-    digitalWrite(IN3, HIGH);
-    digitalWrite(IN4, LOW);
-    analogWrite(ENB, MOTOR_SPEED + 300);
-    digitalWrite(ledPin, LOW); // Turn off LED
-    Serial.println("[Move] 'lui' executed.");
-}
-
-// Function to stop movement
-void dung() {
-    Serial.println("[Move] Executing 'dung' (stop).");
-    digitalWrite(IN1, LOW);
-    digitalWrite(IN2, LOW);
-    analogWrite(ENA, 0);
-    digitalWrite(IN3, LOW);
-    digitalWrite(IN4, LOW);
-    analogWrite(ENB, 0);
-    digitalWrite(ledPin, LOW); // Turn off LED
-    Serial.println("[Move] 'dung' executed.");
+  Serial.println("[Move] Executing 'lui' (backward).");
+  digitalWrite(IN1, HIGH);
+  digitalWrite(IN2, LOW);
+  analogWrite(ENA, MOTOR_SPEED);
+  digitalWrite(IN3, LOW);
+  digitalWrite(IN4, HIGH);
+  analogWrite(ENB, MOTOR_SPEED + 300);
+  digitalWrite(ledPin, LOW);  // Turn off LED
+  Serial.println("[Move] 'lui' executed.");
 }
 
 // Function to turn left
 void retrai() {
-    Serial.println("[Move] Executing 'retrai' (turn left).");
-    digitalWrite(IN1, LOW);
-    digitalWrite(IN2, LOW);
-    analogWrite(ENA, MOTOR_SPEED);
-    digitalWrite(IN3, LOW);
-    digitalWrite(IN4, HIGH);
-    analogWrite(ENB, MOTOR_SPEED);
-    digitalWrite(ledPin, HIGH); // Turn on LED
-    Serial.println("[Move] 'retrai' executed.");
+  Serial.println("[Move] Executing 'retrai' (turn left).");
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, LOW);
+  analogWrite(ENA, MOTOR_SPEED);
+  digitalWrite(IN3, HIGH);
+  digitalWrite(IN4, LOW);
+  analogWrite(ENB, MOTOR_SPEED);
+  digitalWrite(ledPin, HIGH);  // Turn on LED
+  Serial.println("[Move] 'retrai' executed.");
 }
-
 // Function to turn right
 void rephai() {
-    Serial.println("[Move] Executing 'rephai' (turn right).");
-    digitalWrite(IN1, LOW);
-    digitalWrite(IN2, HIGH);
-    analogWrite(ENA, MOTOR_SPEED);
-    digitalWrite(IN3, LOW);
-    digitalWrite(IN4, LOW);
-    analogWrite(ENB, MOTOR_SPEED);
-    digitalWrite(ledPin, HIGH); // Turn on LED
-    Serial.println("[Move] 'rephai' executed.");
+  Serial.println("[Move] Executing 'rephai' (turn right).");
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, HIGH);
+  analogWrite(ENA, MOTOR_SPEED);
+  digitalWrite(IN3, LOW);
+  digitalWrite(IN4, LOW);
+  analogWrite(ENB, MOTOR_SPEED);
+  digitalWrite(ledPin, HIGH);  // Turn on LED
+  Serial.println("[Move] 'rephai' executed.");
+}
+// Function to stop movement
+void dung() {
+  Serial.println("[Move] Executing 'dung' (stop).");
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, LOW);
+  analogWrite(ENA, 0);
+  digitalWrite(IN3, LOW);
+  digitalWrite(IN4, LOW);
+  analogWrite(ENB, 0);
+  digitalWrite(ledPin, LOW);  // Turn off LED
+  Serial.println("[Move] 'dung' executed.");
+}
+// Function to brake movement
+void phanh() {
+  Serial.println("[Move] Executing 'phanh' (brake).");
+  digitalWrite(IN1, HIGH);
+  digitalWrite(IN2, HIGH);
+  analogWrite(ENA, 0);
+  digitalWrite(IN3, HIGH);
+  digitalWrite(IN4, HIGH);
+  analogWrite(ENB, 0);
+  digitalWrite(ledPin, LOW);  // Turn off LED
+  Serial.println("[Move] 'phanh' executed.");
 }
 
 // Function to get battery level (bỏ nếu không sử dụng)

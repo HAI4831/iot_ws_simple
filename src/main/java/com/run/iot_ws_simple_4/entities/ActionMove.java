@@ -1,4 +1,4 @@
-package com.run.iot_ws_simple_4;
+package com.run.iot_ws_simple_4.entities;
 
 import jakarta.validation.constraints.NotNull;
 import lombok.*;

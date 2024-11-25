@@ -10,7 +10,7 @@
     </parent>
     <groupId>com.run</groupId>
     <artifactId>iot_ws_simple</artifactId>
-    <version>1.1.1-OPENBETA</version>
+    <version>1.1.2-OPENBETA</version>
     <name>iot_ws_simple_4</name>
     <description>iot_ws_simple_4</description>
     <url/>

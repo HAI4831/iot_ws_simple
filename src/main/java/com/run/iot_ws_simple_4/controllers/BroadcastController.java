@@ -1,5 +1,6 @@
-package com.run.iot_ws_simple_4;
+package com.run.iot_ws_simple_4.controllers;
 
+import com.run.iot_ws_simple_4.utils.WebSocketSessionManager;
 import lombok.AllArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;

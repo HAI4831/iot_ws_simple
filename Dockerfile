@@ -5,7 +5,7 @@ FROM openjdk:17-jdk-slim
 WORKDIR /app
 
 # Copy the packaged JAR file into the container
-COPY target/iot_ws_simple-1.1.1-OPENBETA.jar /app/app.jar
+COPY target/iot_ws_simple-1.1.2-OPENBETA.jar /app/app.jar
 
 # Expose the application port
 EXPOSE 8060
